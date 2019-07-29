@@ -32,4 +32,4 @@ def save(output, filename):
         cloudpickle.dump(output, fout)
 
 import os
-USE_CUPY = int(os.environ.get("HEPACCELERATE_CUDA")) == 1
+USE_CUPY = int(os.environ.get("HEPACCELERATE_CUDA", 0)) == 1
