@@ -11,10 +11,7 @@ from numpy import maximum as max
 from numpy import minimum as min
 from numpy import power as pow
 
-from ..util import USE_CUPY
-
-if USE_CUPY:
-    import cupy
+from ..util import searchsorted_wrapped
 
 def wrap_formula(fstr, varlist):
     """
@@ -30,73 +27,6 @@ def wrap_formula(fstr, varlist):
     lstr = "lambda %s: %s" % (",".join(varlist), fstr)
     func = eval(lstr)
     return func
-
-from numba import cuda
-
-if USE_CUPY:
-    @cuda.jit('int32(float32[:], float32)', device=True)
-    def searchsorted_inner_left(a, v):
-        n = len(a)
-        lo = np.int32(0)
-        hi = np.int32(n)
-        while hi > lo:
-            mid = (lo + hi) >> 1
-            if a[mid] < (v):
-                # mid is too low => go up
-                lo = mid + 1
-            else:
-                # mid is too high, or is a NaN => go down
-                hi = mid
-        return lo
-    
-    @cuda.jit('int32(float32[:], float32)', device=True)
-    def searchsorted_inner_right(a, v):
-        n = len(a)
-        lo = np.int32(0)
-        hi = np.int32(n)
-        while hi > lo:
-            mid = (lo + hi) >> 1
-            if a[mid] <= (v):
-                # mid is too low => go up
-                lo = mid + 1
-            else:
-                # mid is too high, or is a NaN => go down
-                hi = mid
-        return lo
-      
-    @cuda.jit('void(float32[:], float32[:], int32[:])')
-    def searchsorted_left(arr, vals, out):
-        xi = cuda.grid(1)
-        xstride = cuda.gridsize(1)
-        
-        for i in range(xi, len(vals), xstride):
-            out[i] = searchsorted_inner_left(arr, vals[i])
-    
-    @cuda.jit('void(float32[:], float32[:], int32[:])')
-    def searchsorted_right(arr, vals, out):
-        xi = cuda.grid(1)
-        xstride = cuda.gridsize(1)
-        
-        for i in range(xi, len(vals), xstride):
-            out[i] = searchsorted_inner_right(arr, vals[i])
-
-def searchsorted_wrapped(arr, vals, side="left", asnumpy=True):
-    if not USE_CUPY:
-        idx = np.searchsorted(arr, vals, side)
-    else:
-        if asnumpy:
-            vals = cupy.array(vals)
-            arr = cupy.array(arr)
-        out = cupy.zeros_like(vals, dtype=cupy.int32)
-        if side == "left":
-            searchsorted_left[256,1024](arr, vals, out)
-        elif side == "right":
-            searchsorted_right[256,1024](arr, vals, out)
-        if asnumpy:
-            idx = cupy.asnumpy(out)
-        else:
-            idx = out
-    return idx
 
 def masked_bin_eval(dim1_indices, dimN_bins, dimN_vals):
     dimN_indices = np.empty_like(dim1_indices)
