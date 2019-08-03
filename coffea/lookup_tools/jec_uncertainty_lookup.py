@@ -105,9 +105,6 @@ class jec_uncertainty_lookup(lookup_base):
             outs[:, 0][mask] += self._eval_ups[i](vals)
             outs[:, 1][mask] -= self._eval_downs[i](vals)
 
-        if USE_CUPY:
-            outs = cupy.asnumpy(outs)
-
         return outs
 
     @property
