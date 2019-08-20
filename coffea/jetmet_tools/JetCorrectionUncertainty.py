@@ -5,6 +5,10 @@ from ..util import awkward
 from ..util import numpy as np
 from copy import deepcopy
 
+from ..util import USE_CUPY
+if USE_CUPY:
+    import cupy
+
 import re
 
 

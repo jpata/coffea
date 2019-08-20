@@ -4,19 +4,24 @@ from ..util import awkward
 from ..util import numpy as np
 from copy import deepcopy
 
+import scipy
+import scipy.interpolate
 from scipy.interpolate import interp1d
 
+from ..util import USE_CUPY, interp1d, searchsorted_wrapped
+
+if USE_CUPY:
+    import cupy
 
 def masked_bin_eval(dim1_indices, dimN_bins, dimN_vals):
     dimN_indices = np.empty_like(dim1_indices)
     for i in np.unique(dim1_indices):
         idx = np.where(dim1_indices == i)
-        dimN_indices[idx] = np.clip(np.searchsorted(dimN_bins[i],
+        dimN_indices[idx] = np.clip(searchsorted_wrapped(dimN_bins[i],
                                                     dimN_vals[idx],
                                                     side='right') - 1,
                                     0, len(dimN_bins[i]) - 2)
     return dimN_indices
-
 
 class jec_uncertainty_lookup(lookup_base):
     """
@@ -78,19 +83,24 @@ class jec_uncertainty_lookup(lookup_base):
         """ uncertainties = f(args) """
         bin_vals = {argname: args[self._dim_args[argname]] for argname in self._dim_order}
         eval_vals = {argname: args[self._eval_args[argname]] for argname in self._eval_vars}
+        
+        _np = np
+        if USE_CUPY:
+            _np = cupy
 
         # lookup the bins that we care about
         dim1_name = self._dim_order[0]
-        dim1_indices = np.clip(np.searchsorted(self._bins[dim1_name],
+        dim1_indices = _np.clip(searchsorted_wrapped(self._bins[dim1_name],
                                                bin_vals[dim1_name],
-                                               side='right') - 1,
+                                               side='right', asnumpy=not USE_CUPY) - 1,
                                0, self._bins[dim1_name].size - 2)
 
         # get clamp values and clip the inputs
-        outs = np.ones(shape=(args[0].size, 2), dtype=np.float)
-        for i in np.unique(dim1_indices):
-            mask = np.where(dim1_indices == i)
-            vals = np.clip(eval_vals[self._eval_vars[0]][mask],
+        outs = _np.ones(shape=(args[0].size, 2), dtype=np.float)
+        for i in _np.unique(dim1_indices):
+            i = int(i)
+            mask = _np.where(dim1_indices == i)
+            vals = _np.clip(eval_vals[self._eval_vars[0]][mask],
                            self._eval_knots[0], self._eval_knots[-1])
             outs[:, 0][mask] += self._eval_ups[i](vals)
             outs[:, 1][mask] -= self._eval_downs[i](vals)

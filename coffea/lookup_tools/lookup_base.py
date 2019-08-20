@@ -1,6 +1,10 @@
 from ..util import awkward
 from ..util import numpy as np
+from ..util import USE_CUPY
+import time
 
+if USE_CUPY:
+    import cupy as np
 
 class lookup_base(object):
     # base class for all objects that do some sort of value or function lookup
